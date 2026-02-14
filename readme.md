@@ -2,4 +2,4 @@
 
 compose all your json files from directly in your projects!
 
-prebuilt "snippets" from hytale x ht-modding [documentation](https://hytalemodding.dev/en/docs)
+prebuilt "snippets" from hytale x ht-modding [documentation](https://hytalemodding.dev/en/docs/official-documentation/npc-doc)
