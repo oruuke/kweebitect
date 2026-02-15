@@ -3,7 +3,7 @@ use std::time::Duration;
 use color_eyre;
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
-use crate::model::{CurrentMode, Model, RunningState};
+use crate::model::{CurrentMode, Model, OrderedValue, RunningState};
 
 // update handling with a message for each action/event (logic)
 #[derive(PartialEq)]
@@ -12,35 +12,41 @@ pub enum Message {
     In,
     Up,
     Down,
-    EditObject,
-    EditField,
+    EditValue,
     DeleteObject,
     DeleteField,
     CreateBelow,
     CreateAbove,
+    ConfirmObject,
     ConfirmValue,
     ConfirmCommand,
-    ChangeMode,
     Quit,
 }
 
-pub fn handle_event(_: &Model) -> color_eyre::Result<Option<Message>> {
+pub fn handle_event(model: &Model) -> color_eyre::Result<Option<Message>> {
     if event::poll(Duration::from_millis(250))? {
         if let Event::Key(key) = event::read()? {
             if key.kind == event::KeyEventKind::Press {
-                return Ok(handle_key(key));
+                return Ok(handle_key(key, model));
             }
         }
     }
     Ok(None)
 }
 
-fn handle_key(key: event::KeyEvent) -> Option<Message> {
+fn handle_key(key: event::KeyEvent, model: &Model) -> Option<Message> {
     match key.code {
         KeyCode::Left => Some(Message::Out),
         KeyCode::Right => Some(Message::In),
         KeyCode::Down => Some(Message::Down),
         KeyCode::Up => Some(Message::Up),
+        KeyCode::Enter => match model.current_mode {
+            CurrentMode::Browse => Some(Message::EditValue),
+            CurrentMode::Create => Some(Message::ConfirmValue),
+            CurrentMode::Select => Some(Message::ConfirmValue),
+            CurrentMode::Edit => Some(Message::ConfirmValue),
+            CurrentMode::Command => Some(Message::ConfirmCommand),
+        },
         KeyCode::Char('q') => Some(Message::Quit),
         _ => None,
     }
@@ -57,15 +63,24 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
         }
         Message::Up => {}
         Message::Down => {}
-        Message::EditObject => {}
-        Message::EditField => {}
+        Message::EditValue => {
+            model.current_mode = CurrentMode::Edit;
+        }
         Message::DeleteObject => {}
         Message::DeleteField => {}
-        Message::CreateBelow => {}
-        Message::CreateAbove => {}
-        Message::ConfirmValue => {}
+        Message::CreateBelow => {
+            model.current_mode = CurrentMode::Create;
+        }
+        Message::CreateAbove => {
+            model.current_mode = CurrentMode::Create;
+        }
+        Message::ConfirmObject => {
+            model.current_mode = CurrentMode::Browse;
+        }
+        Message::ConfirmValue => {
+            model.current_mode = CurrentMode::Browse;
+        }
         Message::ConfirmCommand => {}
-        Message::ChangeMode => {}
         Message::Quit => {
             model.running_state = RunningState::Done;
         }

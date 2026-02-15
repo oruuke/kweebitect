@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     pub current_mode: CurrentMode,   // mode the user is in
     pub current_json: OrderedValue,  // the full json content
+    pub current_field: OrderedValue, // field focused by user
     pub current_path: Vec<String>,   // full key and index path to object/array/field
     pub value_input: String,         // value of field being edited
     pub running_state: RunningState, // whether application is running
