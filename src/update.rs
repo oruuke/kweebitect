@@ -3,14 +3,24 @@ use std::time::Duration;
 use color_eyre;
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
-use crate::model::{Model, RunningState};
+use crate::model::{CurrentMode, Model, RunningState};
 
 // update handling with a message for each action/event (logic)
 #[derive(PartialEq)]
 pub enum Message {
-    Increment,
-    Decrement,
-    Reset,
+    Out,
+    In,
+    Up,
+    Down,
+    EditObject,
+    EditField,
+    DeleteObject,
+    DeleteField,
+    CreateBelow,
+    CreateAbove,
+    ConfirmValue,
+    ConfirmCommand,
+    ChangeMode,
     Quit,
 }
 
@@ -27,8 +37,10 @@ pub fn handle_event(_: &Model) -> color_eyre::Result<Option<Message>> {
 
 fn handle_key(key: event::KeyEvent) -> Option<Message> {
     match key.code {
-        KeyCode::Down => Some(Message::Decrement),
-        KeyCode::Up => Some(Message::Increment),
+        KeyCode::Left => Some(Message::Out),
+        KeyCode::Right => Some(Message::In),
+        KeyCode::Down => Some(Message::Down),
+        KeyCode::Up => Some(Message::Up),
         KeyCode::Char('q') => Some(Message::Quit),
         _ => None,
     }
@@ -37,19 +49,23 @@ fn handle_key(key: event::KeyEvent) -> Option<Message> {
 pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     // match all possible messages and return new model reflecting changes
     match msg {
-        Message::Increment => {
-            model.counter += 1;
-            if model.counter > 50 {
-                return Some(Message::Reset);
-            }
+        Message::Out => {
+            model.current_path.pop();
         }
-        Message::Decrement => {
-            model.counter -= 1;
-            if model.counter < -50 {
-                return Some(Message::Reset);
-            }
+        Message::In => {
+            model.current_path.push(String::from("0"));
         }
-        Message::Reset => model.counter = 0,
+        Message::Up => {}
+        Message::Down => {}
+        Message::EditObject => {}
+        Message::EditField => {}
+        Message::DeleteObject => {}
+        Message::DeleteField => {}
+        Message::CreateBelow => {}
+        Message::CreateAbove => {}
+        Message::ConfirmValue => {}
+        Message::ConfirmCommand => {}
+        Message::ChangeMode => {}
         Message::Quit => {
             model.running_state = RunningState::Done;
         }

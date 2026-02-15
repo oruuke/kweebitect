@@ -638,6 +638,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "kweebitect"
+version = "0.1.0"
+dependencies = [
+ "better-panic",
+ "color-eyre",
+ "crossterm 0.28.1",
+ "indexmap",
+ "ratatui",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lab"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1087,18 +1100,6 @@ dependencies = [
  "crossterm 0.29.0",
  "instability",
  "ratatui-core",
-]
-
-[[package]]
-name = "ratatui-elm"
-version = "0.1.0"
-dependencies = [
- "better-panic",
- "color-eyre",
- "crossterm 0.28.1",
- "ratatui",
- "serde",
- "serde_json",
 ]
 
 [[package]]
