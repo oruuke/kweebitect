@@ -27,6 +27,41 @@ impl Default for OrderedValue {
         OrderedValue::Object(IndexMap::new())
     }
 }
+impl OrderedValue {
+    // parse from json string
+    pub fn from_str(s: &str) -> Result<Self, serde_json::Error> {
+        serde_json::from_str(s)
+    }
+
+    // pretty string of value
+    pub fn to_string_pretty(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string_pretty(self)
+    }
+
+    // nested path traversal
+    pub fn get(&self, path: &[String]) -> Option<&Self> {
+        let mut current = self;
+        // deig into structure via each path step
+        for segment in path {
+            current = match current {
+                OrderedValue::Array(arr) => {
+                    let index: usize = segment.parse().ok()?;
+                    arr.get(index)?
+                }
+                OrderedValue::Object(map) => map.get(segment)?,
+                _ => return None,
+            };
+        }
+        Some(current)
+    }
+
+    pub fn get_pretty(&self, path: &[String]) -> String {
+        self.get(path)
+            .expect("path not found")
+            .to_string_pretty()
+            .expect("failed to serialise")
+    }
+}
 
 // mode the user is in
 #[derive(Debug, Default, PartialEq, Eq)]

@@ -13,8 +13,8 @@ pub enum Message {
     Up,
     Down,
     EditValue,
-    DeleteObject,
     DeleteField,
+    DeleteObject,
     CreateBelow,
     CreateAbove,
     ConfirmObject,
@@ -36,10 +36,10 @@ pub fn handle_event(model: &Model) -> color_eyre::Result<Option<Message>> {
 
 fn handle_key(key: event::KeyEvent, model: &Model) -> Option<Message> {
     match key.code {
-        KeyCode::Left => Some(Message::Out),
-        KeyCode::Right => Some(Message::In),
-        KeyCode::Down => Some(Message::Down),
-        KeyCode::Up => Some(Message::Up),
+        KeyCode::Char('h') | KeyCode::Left => Some(Message::Out),
+        KeyCode::Char('l') | KeyCode::Right => Some(Message::In),
+        KeyCode::Char('j') | KeyCode::Down => Some(Message::Down),
+        KeyCode::Char('k') | KeyCode::Up => Some(Message::Up),
         KeyCode::Enter => match model.current_mode {
             CurrentMode::Browse => Some(Message::EditValue),
             CurrentMode::Create => Some(Message::ConfirmValue),
@@ -47,6 +47,8 @@ fn handle_key(key: event::KeyEvent, model: &Model) -> Option<Message> {
             CurrentMode::Edit => Some(Message::ConfirmValue),
             CurrentMode::Command => Some(Message::ConfirmCommand),
         },
+        KeyCode::Char('o') => Some(Message::CreateBelow),
+        KeyCode::Char('O') => Some(Message::CreateAbove),
         KeyCode::Char('q') => Some(Message::Quit),
         _ => None,
     }
@@ -66,8 +68,8 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
         Message::EditValue => {
             model.current_mode = CurrentMode::Edit;
         }
-        Message::DeleteObject => {}
         Message::DeleteField => {}
+        Message::DeleteObject => {}
         Message::CreateBelow => {
             model.current_mode = CurrentMode::Create;
         }
