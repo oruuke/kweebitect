@@ -38,10 +38,18 @@ impl OrderedValue {
         serde_json::to_string_pretty(self)
     }
 
+    // first key of object
+    pub fn first_key(&self) -> Option<&String> {
+        match self {
+            OrderedValue::Object(map) => map.keys().next(),
+            _ => None,
+        }
+    }
+
     // nested path traversal
     pub fn get(&self, path: &[String]) -> Option<&Self> {
         let mut current = self;
-        // deig into structure via each path step
+        // dig into structure via each path step
         for segment in path {
             current = match current {
                 OrderedValue::Array(arr) => {
@@ -55,6 +63,7 @@ impl OrderedValue {
         Some(current)
     }
 
+    // get pretty string of json
     pub fn get_pretty(&self, path: &[String]) -> String {
         self.get(path)
             .expect("path not found")

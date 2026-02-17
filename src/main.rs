@@ -42,8 +42,6 @@ fn main() -> color_eyre::Result<()> {
         ]
     }"#;
     let data: OrderedValue = OrderedValue::from_str(json)?;
-    // TEST PATH
-    model.current_path = vec!["Instructions".to_string()];
     model.current_json = data;
 
     while model.running_state != RunningState::Done {

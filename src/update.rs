@@ -61,10 +61,48 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
             model.current_path.pop();
         }
         Message::In => {
-            model.current_path.push(String::from("0"));
+            // get potential json at current path
+            let attempted_json = model.current_json.get(&model.current_path);
+
+            // go to first item in array, or first field in object
+            if let Some(attempt) = attempted_json {
+                match attempt {
+                    OrderedValue::Array(arr) if !arr.is_empty() => {
+                        // add first index
+                        model.current_path.push(String::from("0"));
+                    }
+                    OrderedValue::Object(map) => {
+                        if let Some((first_key, _)) = map.iter().next() {
+                            // add found key
+                            model.current_path.push(first_key.clone());
+                        }
+                    }
+                    _ => {}
+                }
+            }
         }
-        Message::Up => {}
-        Message::Down => {}
+        Message::Up => {
+            // split current segment off from path for mutation to decrement vertically
+            if let Some((current_key, parent_path)) = model.current_path.split_last_mut() {
+                if let Some(next) =
+                    navigate_vertically(&model.current_json, parent_path, current_key, -1)
+                {
+                    // replace current segment
+                    *current_key = next;
+                }
+            }
+        }
+        Message::Down => {
+            // split current segment off from path for mutation to increment vertically
+            if let Some((current_key, parent_path)) = model.current_path.split_last_mut() {
+                if let Some(next) =
+                    navigate_vertically(&model.current_json, parent_path, current_key, 1)
+                {
+                    // replace current segment
+                    *current_key = next;
+                }
+            }
+        }
         Message::EditValue => {
             model.current_mode = CurrentMode::Edit;
         }
@@ -88,4 +126,45 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
         }
     };
     None
+}
+
+fn navigate_vertically(
+    root: &OrderedValue,
+    parent_path: &[String],
+    current_segment: &str,
+    delta: isize,
+) -> Option<String> {
+    // resolve parent container in case of early exit
+    let parent = root.get(parent_path)?;
+
+    // determine if array or object
+    match parent {
+        OrderedValue::Array(arr) => {
+            // parse current path segment as array index
+            let index = current_segment.parse::<usize>().ok()?;
+
+            // find adjacent index
+            let next = index as isize + delta;
+            if next < 0 || next >= arr.len() as isize {
+                return None;
+            }
+
+            Some((next as usize).to_string())
+        }
+        OrderedValue::Object(map) => {
+            // get order number of current key
+            let pos = map.get_index_of(current_segment)?;
+
+            // find adjacent index
+            let next = pos as isize + delta;
+            if next < 0 || next >= map.len() as isize {
+                return None;
+            }
+
+            // return key at position
+            let (key, _) = map.get_index(next as usize)?;
+            Some(key.clone())
+        }
+        _ => None,
+    }
 }
