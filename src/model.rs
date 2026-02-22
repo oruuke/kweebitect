@@ -1,16 +1,36 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use std::sync::{LazyLock, Mutex};
+use tui_widget_list::ListState;
 
 // full model data
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Model {
     pub current_mode: CurrentMode,   // mode the user is in
     pub current_json: OrderedValue,  // the full json content
     pub current_field: OrderedValue, // field focused by user
     pub current_path: Vec<String>,   // full key and index path to object/array/field
     pub value_input: String,         // value of field being edited
+    pub list_state: ListState,       // state of list widget
     pub running_state: RunningState, // whether application is running
 }
+
+impl Default for Model {
+    fn default() -> Self {
+        Self {
+            current_mode: CurrentMode::Browse,
+            current_json: OrderedValue::Null,
+            current_field: OrderedValue::Null,
+            current_path: vec![],
+            value_input: String::new(),
+            list_state: ListState::default(),
+            running_state: RunningState::Running,
+        }
+    }
+}
+
+pub static LIST_STATE: LazyLock<Mutex<ListState>> =
+    LazyLock::new(|| Mutex::new(Model::default().list_state));
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
@@ -77,6 +97,7 @@ impl OrderedValue {
 pub enum CurrentMode {
     #[default]
     Browse, // browsing json structure
+    Preview, // preview in prettified json
     Create,  // creating new objects
     Select,  // selecting preset field values
     Edit,    // typing custom field value

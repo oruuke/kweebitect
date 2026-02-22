@@ -3,8 +3,7 @@ use std::time::Duration;
 use color_eyre;
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
-use crate::model::{CurrentMode, Model, OrderedValue, RunningState};
-
+use crate::model::{CurrentMode, LIST_STATE, Model, OrderedValue, RunningState};
 // update handling with a message for each action/event (logic)
 #[derive(PartialEq)]
 pub enum Message {
@@ -12,6 +11,7 @@ pub enum Message {
     In,
     Up,
     Down,
+    ViewPreview,
     EditValue,
     DeleteField,
     DeleteObject,
@@ -40,12 +40,14 @@ fn handle_key(key: event::KeyEvent, model: &Model) -> Option<Message> {
         KeyCode::Char('l') | KeyCode::Right => Some(Message::In),
         KeyCode::Char('j') | KeyCode::Down => Some(Message::Down),
         KeyCode::Char('k') | KeyCode::Up => Some(Message::Up),
+        KeyCode::Char('p') => Some(Message::ViewPreview),
         KeyCode::Enter => match model.current_mode {
             CurrentMode::Browse => Some(Message::EditValue),
             CurrentMode::Create => Some(Message::ConfirmValue),
             CurrentMode::Select => Some(Message::ConfirmValue),
             CurrentMode::Edit => Some(Message::ConfirmValue),
             CurrentMode::Command => Some(Message::ConfirmCommand),
+            CurrentMode::Preview => None,
         },
         KeyCode::Char('o') => Some(Message::CreateBelow),
         KeyCode::Char('O') => Some(Message::CreateAbove),
@@ -59,6 +61,9 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     match msg {
         Message::Out => {
             model.current_path.pop();
+            if let Ok(mut state) = LIST_STATE.lock() {
+                state.previous();
+            }
         }
         Message::In => {
             // get potential json at current path
@@ -70,11 +75,17 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
                     OrderedValue::Array(arr) if !arr.is_empty() => {
                         // add first index
                         model.current_path.push(String::from("0"));
+                        if let Ok(mut state) = LIST_STATE.lock() {
+                            state.next();
+                        }
                     }
                     OrderedValue::Object(map) => {
                         if let Some((first_key, _)) = map.iter().next() {
                             // add found key
                             model.current_path.push(first_key.clone());
+                            if let Ok(mut state) = LIST_STATE.lock() {
+                                state.next();
+                            }
                         }
                     }
                     _ => {}
@@ -103,6 +114,14 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
                 }
             }
         }
+        Message::ViewPreview => match model.current_mode {
+            CurrentMode::Preview => {
+                model.current_mode = CurrentMode::Browse;
+            }
+            _ => {
+                model.current_mode = CurrentMode::Preview;
+            }
+        },
         Message::EditValue => {
             model.current_mode = CurrentMode::Edit;
         }

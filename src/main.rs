@@ -1,9 +1,5 @@
 use better_panic;
-use clap::Parser;
 use color_eyre;
-use std::fs;
-use std::io::Write;
-use std::path::Path;
 
 mod model;
 mod update;
@@ -13,6 +9,7 @@ use crate::{
     update::{handle_event, update},
     view::view,
 };
+use tui_widget_list::ListState;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -43,6 +40,7 @@ fn main() -> color_eyre::Result<()> {
     }"#;
     let data: OrderedValue = OrderedValue::from_str(json)?;
     model.current_json = data;
+    model.list_state = ListState::default();
 
     while model.running_state != RunningState::Done {
         // render current  view

@@ -1,11 +1,18 @@
-use crate::model::{CurrentMode, Model};
+use crate::model::{CurrentMode, LIST_STATE, Model};
+
+#[path = "common/lib.rs"]
+mod common;
+
+use common::{Colors, item_container::ListItemContainer};
+//use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Margin, Rect},
-    style::Style,
-    symbols::border,
-    widgets::{Block, Borders, Paragraph},
+    layout::{Constraint, Layout, Rect},
+    prelude::*,
+    style::Stylize,
+    widgets::{Block, Borders, Padding, Paragraph},
 };
+use tui_widget_list::{ListBuilder, ListState, ListView, ScrollAxis};
 
 // rendering view to always produce same ui representation for given model
 pub fn view(model: &mut Model, frame: &mut Frame) {
@@ -30,6 +37,7 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
     // mode strip
     let pretty_mode = match model.current_mode {
         CurrentMode::Browse => "browse",
+        CurrentMode::Preview => "preview",
         CurrentMode::Create => "create",
         CurrentMode::Select => "select",
         CurrentMode::Edit => "edit",
@@ -40,6 +48,41 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
 
     // rendering layouts
     frame.render_widget(path, top);
-    frame.render_widget(json, middle);
+    match model.current_mode {
+        CurrentMode::Preview => {
+            frame.render_widget(json, middle);
+        }
+        _ => {
+            frame.render_widget(HorizontalList, middle);
+        }
+    }
     frame.render_widget(mode, bottom);
+}
+
+pub struct HorizontalList;
+impl Widget for HorizontalList {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        const ITEMS: [&str; 4] = ["blahaj", "skirts", "thigh highs", "converse"];
+        let builder = ListBuilder::new(move |context| {
+            let line = Line::from(ITEMS[context.index]).alignment(Alignment::Center);
+            let item = ListItemContainer::new(line, Padding::vertical(1));
+
+            let item = match context.is_selected {
+                true => item.bg(Colors::ORANGE).fg(Colors::CHARCOAL),
+                false if context.index % 2 == 0 => item.bg(Colors::CHARCOAL),
+                false => item.bg(Colors::BLACK),
+            };
+
+            (item, 20)
+        });
+
+        let list = ListView::new(builder, ITEMS.len())
+            .scroll_axis(ScrollAxis::Horizontal)
+            .infinite_scrolling(false)
+            .block(Block::default().borders(Borders::ALL));
+
+        if let Ok(mut list_state) = LIST_STATE.lock() {
+            StatefulWidget::render(list, area, buf, &mut list_state);
+        }
+    }
 }

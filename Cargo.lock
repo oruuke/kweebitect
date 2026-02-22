@@ -738,6 +738,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
+ "tui-widget-list",
 ]
 
 [[package]]
@@ -1672,6 +1673,16 @@ dependencies = [
  "sharded-slab",
  "thread_local",
  "tracing-core",
+]
+
+[[package]]
+name = "tui-widget-list"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81a82508e870aa543ffbd7a1720fff6dab4f985f629261de8db7502a462959d3"
+dependencies = [
+ "ratatui-core",
+ "ratatui-widgets",
 ]
 
 [[package]]
