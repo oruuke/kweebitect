@@ -3,7 +3,7 @@ use std::time::Duration;
 use color_eyre;
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
-use crate::model::{CurrentMode, LIST_STATE, Model, OrderedValue, RunningState};
+use crate::model::{CurrentMode, Model, OrderedValue, RunningState};
 // update handling with a message for each action/event (logic)
 #[derive(PartialEq)]
 pub enum Message {
@@ -61,9 +61,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     match msg {
         Message::Out => {
             model.current_path.pop();
-            if let Ok(mut state) = LIST_STATE.lock() {
-                state.previous();
-            }
+            model.list_state.previous();
         }
         Message::In => {
             // get potential json at current path
@@ -75,17 +73,13 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
                     OrderedValue::Array(arr) if !arr.is_empty() => {
                         // add first index
                         model.current_path.push(String::from("0"));
-                        if let Ok(mut state) = LIST_STATE.lock() {
-                            state.next();
-                        }
+                        model.list_state.next();
                     }
                     OrderedValue::Object(map) => {
                         if let Some((first_key, _)) = map.iter().next() {
                             // add found key
                             model.current_path.push(first_key.clone());
-                            if let Ok(mut state) = LIST_STATE.lock() {
-                                state.next();
-                            }
+                            model.list_state.next();
                         }
                     }
                     _ => {}

@@ -1,6 +1,5 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::sync::{LazyLock, Mutex};
 use tui_widget_list::ListState;
 
 // full model data
@@ -28,9 +27,6 @@ impl Default for Model {
         }
     }
 }
-
-pub static LIST_STATE: LazyLock<Mutex<ListState>> =
-    LazyLock::new(|| Mutex::new(Model::default().list_state));
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]

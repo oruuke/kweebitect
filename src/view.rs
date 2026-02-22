@@ -1,4 +1,4 @@
-use crate::model::{CurrentMode, LIST_STATE, Model};
+use crate::model::{CurrentMode, Model};
 
 #[path = "common/lib.rs"]
 mod common;
@@ -53,18 +53,27 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
             frame.render_widget(json, middle);
         }
         _ => {
-            frame.render_widget(HorizontalList, middle);
+            HorizontalList::new(model).render(frame, middle);
         }
     }
     frame.render_widget(mode, bottom);
 }
 
-pub struct HorizontalList;
-impl Widget for HorizontalList {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        const ITEMS: [&str; 4] = ["blahaj", "skirts", "thigh highs", "converse"];
+// thin wrapper for mutable state access
+pub struct HorizontalList<'a> {
+    model: &'a mut Model,
+}
+
+impl<'a> HorizontalList<'a> {
+    pub fn new(model: &'a mut Model) -> Self {
+        Self { model }
+    }
+
+    // render proxy
+    pub fn render(self, frame: &mut Frame, area: Rect) {
+        let items: [&str; 4] = ["blahaj", "skirt", "sockies", "converse"];
         let builder = ListBuilder::new(move |context| {
-            let line = Line::from(ITEMS[context.index]).alignment(Alignment::Center);
+            let line = Line::from(items[context.index]).alignment(Alignment::Center);
             let item = ListItemContainer::new(line, Padding::vertical(1));
 
             let item = match context.is_selected {
@@ -76,13 +85,12 @@ impl Widget for HorizontalList {
             (item, 20)
         });
 
-        let list = ListView::new(builder, ITEMS.len())
+        let list = ListView::new(builder, items.len())
             .scroll_axis(ScrollAxis::Horizontal)
             .infinite_scrolling(false)
             .block(Block::default().borders(Borders::ALL));
 
-        if let Ok(mut list_state) = LIST_STATE.lock() {
-            StatefulWidget::render(list, area, buf, &mut list_state);
-        }
+        // actual render wit self state :3
+        frame.render_stateful_widget(list, area, &mut self.model.list_state);
     }
 }
