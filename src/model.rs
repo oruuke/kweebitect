@@ -1,17 +1,30 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
+use strum::Display;
 use tui_widget_list::ListState;
+
+// segment structure for supplying data at each level
+#[derive(Debug, Clone)]
+pub struct PathSegment {
+    pub key: String,
+    pub value: OrderedValue,
+}
+impl AsRef<str> for PathSegment {
+    fn as_ref(&self) -> &str {
+        &self.key
+    }
+}
 
 // full model data
 #[derive(Debug)]
 pub struct Model {
-    pub current_mode: CurrentMode,   // mode the user is in
-    pub current_json: OrderedValue,  // the full json content
-    pub current_field: OrderedValue, // field focused by user
-    pub current_path: Vec<String>,   // full key and index path to object/array/field
-    pub value_input: String,         // value of field being edited
-    pub list_state: ListState,       // state of list widget
-    pub running_state: RunningState, // whether application is running
+    pub current_mode: CurrentMode,      // mode the user is in
+    pub current_json: OrderedValue,     // the full json content
+    pub current_field: OrderedValue,    // field focused by user
+    pub current_path: Vec<PathSegment>, // full key:value pair pathway to object/array/field
+    pub value_input: String,            // value of field being edited
+    pub list_state: ListState,          // state of list widget
+    pub running_state: RunningState,    // whether application is running
 }
 
 impl Default for Model {
@@ -28,7 +41,8 @@ impl Default for Model {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+// custom untyped serde structure for ordered indexing
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Display)]
 #[serde(untagged)]
 pub enum OrderedValue {
     Null,
@@ -63,16 +77,17 @@ impl OrderedValue {
     }
 
     // nested path traversal
-    pub fn get(&self, path: &[String]) -> Option<&Self> {
+    pub fn get(&self, path: &[impl AsRef<str>]) -> Option<&Self> {
         let mut current = self;
         // dig into structure via each path step
         for segment in path {
+            let key = segment.as_ref();
             current = match current {
                 OrderedValue::Array(arr) => {
-                    let index: usize = segment.parse().ok()?;
+                    let index: usize = key.parse().ok()?;
                     arr.get(index)?
                 }
-                OrderedValue::Object(map) => map.get(segment)?,
+                OrderedValue::Object(map) => map.get(key)?,
                 _ => return None,
             };
         }
@@ -80,7 +95,7 @@ impl OrderedValue {
     }
 
     // get pretty string of json
-    pub fn get_pretty(&self, path: &[String]) -> String {
+    pub fn get_pretty(&self, path: &[impl AsRef<str>]) -> String {
         self.get(path)
             .expect("path not found")
             .to_string_pretty()

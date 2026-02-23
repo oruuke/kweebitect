@@ -3,7 +3,7 @@ use std::time::Duration;
 use color_eyre;
 use ratatui::crossterm::event::{self, Event, KeyCode};
 
-use crate::model::{CurrentMode, Model, OrderedValue, RunningState};
+use crate::model::{CurrentMode, Model, OrderedValue, PathSegment, RunningState};
 // update handling with a message for each action/event (logic)
 #[derive(PartialEq)]
 pub enum Message {
@@ -72,13 +72,19 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
                 match attempt {
                     OrderedValue::Array(arr) if !arr.is_empty() => {
                         // add first index
-                        model.current_path.push(String::from("0"));
+                        model.current_path.push(PathSegment {
+                            key: "0".into(),
+                            value: attempt.to_owned(),
+                        });
                         model.list_state.next();
                     }
                     OrderedValue::Object(map) => {
                         if let Some((first_key, _)) = map.iter().next() {
                             // add found key
-                            model.current_path.push(first_key.clone());
+                            model.current_path.push(PathSegment {
+                                key: first_key.clone(),
+                                value: attempt.to_owned(),
+                            });
                             model.list_state.next();
                         }
                     }
@@ -88,23 +94,29 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
         }
         Message::Up => {
             // split current segment off from path for mutation to decrement vertically
-            if let Some((current_key, parent_path)) = model.current_path.split_last_mut() {
-                if let Some(next) =
-                    navigate_vertically(&model.current_json, parent_path, current_key, -1)
+            if let Some((last_segment, parent_segments)) = model.current_path.split_last() {
+                let parent_keys: Vec<&str> =
+                    parent_segments.iter().map(|p| p.key.as_str()).collect();
+                if let Some(previous_key) =
+                    navigate_vertically(&model.current_json, &parent_keys, &last_segment.key, -1)
                 {
                     // replace current segment
-                    *current_key = next;
+                    let last = model.current_path.last_mut().unwrap();
+                    last.key = previous_key;
                 }
             }
         }
         Message::Down => {
             // split current segment off from path for mutation to increment vertically
-            if let Some((current_key, parent_path)) = model.current_path.split_last_mut() {
-                if let Some(next) =
-                    navigate_vertically(&model.current_json, parent_path, current_key, 1)
+            if let Some((last_segment, parent_segments)) = model.current_path.split_last() {
+                let parent_keys: Vec<&str> =
+                    parent_segments.iter().map(|p| p.key.as_str()).collect();
+                if let Some(next_key) =
+                    navigate_vertically(&model.current_json, &parent_keys, &last_segment.key, 1)
                 {
                     // replace current segment
-                    *current_key = next;
+                    let last = model.current_path.last_mut().unwrap();
+                    last.key = next_key;
                 }
             }
         }
@@ -143,7 +155,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
 
 fn navigate_vertically(
     root: &OrderedValue,
-    parent_path: &[String],
+    parent_path: &[impl AsRef<str>],
     current_segment: &str,
     delta: isize,
 ) -> Option<String> {

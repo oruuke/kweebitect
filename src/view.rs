@@ -5,12 +5,13 @@ mod common;
 
 use common::{Colors, item_container::ListItemContainer};
 //use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
+use crate::model;
+use itertools::Itertools;
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
-    prelude::*,
+    layout::{Constraint, Constraint::Length, Layout, Rect},
     style::Stylize,
-    widgets::{Block, Borders, Padding, Paragraph},
+    widgets::{Block, Borders, List as RatatuiList, ListItem, Padding, Paragraph},
 };
 use tui_widget_list::{ListBuilder, ListState, ListView, ScrollAxis};
 
@@ -25,7 +26,7 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
     ]));
 
     // path strip
-    let pretty_path = model.current_path.join("/");
+    let pretty_path = model.current_path.iter().map(|p| &p.key).join("/");
     let block_path = Block::bordered();
     let path = Paragraph::new(format!("{}", pretty_path)).block(block_path);
 
@@ -46,8 +47,9 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
     let block_mode = Block::bordered();
     let mode = Paragraph::new(format!("{}", pretty_mode)).block(block_mode);
 
-    // rendering layouts
+    // top current path strip
     frame.render_widget(path, top);
+    // main view, rendering either preview or browser
     match model.current_mode {
         CurrentMode::Preview => {
             frame.render_widget(json, middle);
@@ -56,6 +58,7 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
             HorizontalList::new(model).render(frame, middle);
         }
     }
+    // bottom current mode strip
     frame.render_widget(mode, bottom);
 }
 
@@ -64,33 +67,44 @@ pub struct HorizontalList<'a> {
     model: &'a mut Model,
 }
 
+// horizontal list for representing depth
 impl<'a> HorizontalList<'a> {
     pub fn new(model: &'a mut Model) -> Self {
         Self { model }
     }
 
-    // render proxy
+    // render proxy for passing state
     pub fn render(self, frame: &mut Frame, area: Rect) {
-        let items: [&str; 4] = ["blahaj", "skirt", "sockies", "converse"];
-        let builder = ListBuilder::new(move |context| {
-            let line = Line::from(items[context.index]).alignment(Alignment::Center);
-            let item = ListItemContainer::new(line, Padding::vertical(1));
+        // setup layout for each level of depth
+        let constraints: Vec<_> = std::iter::once(Length(20))
+            .chain(self.model.current_path.iter().map(|_| Length(20)))
+            .collect();
+        let layout = Layout::horizontal(constraints)
+            .flex(ratatui::layout::Flex::Start)
+            .spacing(1)
+            .split(area);
+        // render root to give user somewhere to start
+        let root = Paragraph::new("/").block(Block::default().borders(Borders::ALL).title("root"));
+        frame.render_widget(root, layout[0]);
 
-            let item = match context.is_selected {
-                true => item.bg(Colors::ORANGE).fg(Colors::CHARCOAL),
-                false if context.index % 2 == 0 => item.bg(Colors::CHARCOAL),
-                false => item.bg(Colors::BLACK),
-            };
-
-            (item, 20)
-        });
-
-        let list = ListView::new(builder, items.len())
-            .scroll_axis(ScrollAxis::Horizontal)
-            .infinite_scrolling(false)
-            .block(Block::default().borders(Borders::ALL));
-
-        // actual render wit self state :3
-        frame.render_stateful_widget(list, area, &mut self.model.list_state);
+        // iterate rendering
+        for (i, segment) in self.model.current_path.iter().enumerate() {
+            // build key path up to scoped segment
+            let keys: Vec<&str> = self.model.current_path[..=i]
+                .iter()
+                .map(|p| p.key.as_str())
+                .collect();
+            // get printable type of scoped segment
+            let segment_type = self
+                .model
+                .current_json
+                .get(&keys)
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "unknown".to_string());
+            // render block for segment
+            let widget = Paragraph::new(segment.key.clone())
+                .block(Block::default().borders(Borders::ALL).title(segment_type));
+            frame.render_widget(widget, layout[i + 1]);
+        }
     }
 }
