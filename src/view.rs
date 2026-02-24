@@ -1,11 +1,10 @@
-use crate::model::{CurrentMode, Model};
+use crate::model::{CurrentMode, Model, OrderedValue, PathSegment};
 
 #[path = "common/lib.rs"]
 mod common;
 
 use common::{Colors, item_container::ListItemContainer};
 //use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
-use crate::model;
 use itertools::Itertools;
 use ratatui::{
     Frame,
@@ -30,11 +29,6 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
     let block_path = Block::bordered();
     let path = Paragraph::new(format!("{}", pretty_path)).block(block_path);
 
-    // main browser
-    let pretty_json = model.current_json.get_pretty(&model.current_path);
-    let block_json = Block::bordered();
-    let json = Paragraph::new(format!("{}", pretty_json)).block(block_json);
-
     // mode strip
     let pretty_mode = match model.current_mode {
         CurrentMode::Browse => "browse",
@@ -52,9 +46,15 @@ pub fn view(model: &mut Model, frame: &mut Frame) {
     // main view, rendering either preview or browser
     match model.current_mode {
         CurrentMode::Preview => {
+            // build preview paragraph
+            let pretty_json = model.current_json.get_pretty(&model.current_path);
+            let block_json = Block::bordered();
+            let json = Paragraph::new(format!("{}", pretty_json)).block(block_json);
+            // render preview in middle area
             frame.render_widget(json, middle);
         }
         _ => {
+            // render browser in middle area
             HorizontalList::new(model).render(frame, middle);
         }
     }
@@ -76,15 +76,17 @@ impl<'a> HorizontalList<'a> {
     // render proxy for passing state
     pub fn render(self, frame: &mut Frame, area: Rect) {
         // setup layout for each level of depth
-        let constraints: Vec<_> = std::iter::once(Length(20))
-            .chain(self.model.current_path.iter().map(|_| Length(20)))
+        let constraints: Vec<_> = std::iter::once(Length(40))
+            .chain(self.model.current_path.iter().map(|_| Length(40)))
             .collect();
         let layout = Layout::horizontal(constraints)
             .flex(ratatui::layout::Flex::Start)
             .spacing(1)
             .split(area);
         // render root to give user somewhere to start
-        let root = Paragraph::new("/").block(Block::default().borders(Borders::ALL).title("root"));
+        let pretty_json = self.model.current_json.to_string_pretty().expect("failed");
+        let root = Paragraph::new(format!("{}", pretty_json))
+            .block(Block::default().borders(Borders::ALL).title("root"));
         frame.render_widget(root, layout[0]);
 
         // iterate rendering
@@ -102,9 +104,11 @@ impl<'a> HorizontalList<'a> {
                 .map(|v| v.to_string())
                 .unwrap_or_else(|| "unknown".to_string());
             // render block for segment
-            let widget = Paragraph::new(segment.key.clone())
+            let pretty_json = self.model.current_json.get_pretty(&keys);
+            let json = Paragraph::new(format!("{}", pretty_json))
                 .block(Block::default().borders(Borders::ALL).title(segment_type));
-            frame.render_widget(widget, layout[i + 1]);
+
+            frame.render_widget(json, layout[i + 1]);
         }
     }
 }
