@@ -8,9 +8,12 @@ use common::{Colors, item_container::ListItemContainer};
 use itertools::Itertools;
 use ratatui::{
     Frame,
-    layout::{Constraint, Constraint::Length, Layout, Rect},
+    layout::{Alignment, Constraint, Constraint::Length, Layout, Rect},
+    prelude::*,
     style::Stylize,
-    widgets::{Block, Borders, List as RatatuiList, ListItem, Padding, Paragraph},
+    widgets::{
+        Block, Borders, List as RatatuiList, ListItem, Padding, Paragraph, StatefulWidget, Widget,
+    },
 };
 use tui_widget_list::{ListBuilder, ListState, ListView, ScrollAxis};
 
