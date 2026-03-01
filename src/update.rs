@@ -1,9 +1,15 @@
 use std::time::Duration;
 
 use color_eyre;
+use indexmap::IndexMap;
 use ratatui::crossterm::event::{self, Event, KeyCode};
+use tui_widget_list::ListState;
 
-use crate::model::{CurrentMode, Model, OrderedValue, PathSegment, RunningState};
+use crate::model::{
+    CurrentMode, Model, OrderedValue, PathSegment, RunningState, container_entries_for,
+    value_for_entry,
+};
+
 // update handling with a message for each action/event (logic)
 #[derive(PartialEq)]
 pub enum Message {
@@ -60,67 +66,22 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     // match all possible messages and return new model reflecting changes
     match msg {
         Message::Out => {
+            // remove one level of path depth
             model.current_path.pop();
-            model.list_state.previous();
         }
         Message::In => {
-            // get potential json at current path
-            let attempted_json = model.current_json.get(&model.current_path);
-
-            // go to first item in array, or first field in object
-            if let Some(attempt) = attempted_json {
-                match attempt {
-                    OrderedValue::Array(arr) if !arr.is_empty() => {
-                        // add first index
-                        model.current_path.push(PathSegment {
-                            key: "0".into(),
-                            value: attempt.to_owned(),
-                        });
-                        model.list_state.next();
-                    }
-                    OrderedValue::Object(map) => {
-                        if let Some((first_key, _)) = map.iter().next() {
-                            // add found key
-                            model.current_path.push(PathSegment {
-                                key: first_key.clone(),
-                                value: attempt.to_owned(),
-                            });
-                            model.list_state.next();
-                        }
-                    }
-                    _ => {}
-                }
-            }
+            enter_container(model);
         }
         Message::Up => {
-            // split current segment off from path for mutation to decrement vertically
-            if let Some((last_segment, parent_segments)) = model.current_path.split_last() {
-                let parent_keys: Vec<&str> =
-                    parent_segments.iter().map(|p| p.key.as_str()).collect();
-                if let Some(previous_key) =
-                    navigate_vertically(&model.current_json, &parent_keys, &last_segment.key, -1)
-                {
-                    // replace current segment
-                    let last = model.current_path.last_mut().unwrap();
-                    last.key = previous_key;
-                }
-            }
+            // move selection wit negative delta
+            navigate_active_container(model, -1);
         }
         Message::Down => {
-            // split current segment off from path for mutation to increment vertically
-            if let Some((last_segment, parent_segments)) = model.current_path.split_last() {
-                let parent_keys: Vec<&str> =
-                    parent_segments.iter().map(|p| p.key.as_str()).collect();
-                if let Some(next_key) =
-                    navigate_vertically(&model.current_json, &parent_keys, &last_segment.key, 1)
-                {
-                    // replace current segment
-                    let last = model.current_path.last_mut().unwrap();
-                    last.key = next_key;
-                }
-            }
+            // move selection wit positive delta
+            navigate_active_container(model, 1);
         }
         Message::ViewPreview => match model.current_mode {
+            // toggle between preview and browse
             CurrentMode::Preview => {
                 model.current_mode = CurrentMode::Browse;
             }
@@ -153,43 +114,74 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     None
 }
 
-fn navigate_vertically(
-    root: &OrderedValue,
-    parent_path: &[impl AsRef<str>],
-    current_segment: &str,
-    delta: isize,
-) -> Option<String> {
-    // resolve parent container in case of early exit
-    let parent = root.get(parent_path)?;
+fn navigate_active_container(model: &mut Model, delta: isize) {
+    let Some(segment) = model.current_path.last_mut() else {
+        return;
+    };
 
-    // determine if array or object
-    match parent {
-        OrderedValue::Array(arr) => {
-            // parse current path segment as array index
-            let index = current_segment.parse::<usize>().ok()?;
-
-            // find adjacent index
-            let next = index as isize + delta;
-            if next < 0 || next >= arr.len() as isize {
-                return None;
-            }
-
-            Some((next as usize).to_string())
-        }
-        OrderedValue::Object(map) => {
-            // get order number of current key
-            let pos = map.get_index_of(current_segment)?;
-
-            // find adjacent index
-            let next = pos as isize + delta;
-            if next < 0 || next >= map.len() as isize {
-                return None;
-            }
-
-            // return key at position
-            let (key, _) = map.get_index(next as usize)?;
-            Some(key.clone())
-        }
-        _ => None,
+    // get entries for this container
+    let entries = container_entries_for(&segment.value);
+    if entries.is_empty() {
+        return;
     }
+
+    // ensure selection exists before moving
+    if segment.list_state.selected().is_none() {
+        segment.list_state.select(Some(0));
+    }
+
+    // move selection
+    if delta < 0 {
+        segment.list_state.previous();
+    } else {
+        segment.list_state.next();
+    }
+
+    // map selection back into a key/index string
+    let Some(selected_index) = segment.list_state.selected() else {
+        return;
+    };
+    let Some(selected_key) = entries.get(selected_index).cloned() else {
+        return;
+    };
+
+    // update selection key at this depth
+    segment.key = selected_key;
+}
+
+// adds new list state for selected container
+fn enter_container(model: &mut Model) {
+    // get active depth segment
+    let Some(parent) = model.current_path.last() else {
+        return;
+    };
+
+    // get selected value witin the active container
+    let Some(selected_value) = value_for_entry(&parent.value, &parent.key) else {
+        return;
+    };
+
+    // only enter if the selected value is a container wit values
+    let is_container = matches!(
+        selected_value,
+        OrderedValue::Array(_) | OrderedValue::Object(_)
+    );
+    if !is_container {
+        return;
+    };
+    let selected_container = selected_value.clone();
+    let entries = container_entries_for(&selected_container);
+    if entries.is_empty() {
+        return;
+    }
+
+    // start from first entry
+    let mut child_state = ListState::default();
+    child_state.select(Some(0));
+    let child_key = entries[0].clone();
+
+    // push new segment for child container depth
+    model
+        .current_path
+        .push(PathSegment::new(child_key, selected_container, child_state));
 }

@@ -9,7 +9,6 @@ use crate::{
     update::{handle_event, update},
     view::view,
 };
-use tui_widget_list::ListState;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
@@ -40,7 +39,7 @@ fn main() -> color_eyre::Result<()> {
     }"#;
     let data: OrderedValue = OrderedValue::from_str(json)?;
     model.current_json = data;
-    model.list_state = ListState::default();
+    model.ensure_root_segment();
 
     while model.running_state != RunningState::Done {
         // render current  view
