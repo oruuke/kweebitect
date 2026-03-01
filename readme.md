@@ -10,9 +10,9 @@ prebuilt "snippets" from hypixel studios x hytale modding [documentation](https:
 
 ## todo
 - [x] application structure
-- [ ] state logic
-- [ ] nesting view
-- [ ] navigation
+- [x] state logic
+- [x] nesting view
+- [x] navigation
 - [ ] npc snippet structures
 - [ ] npc field options
 - [ ] snippets and options for all of hytale!
