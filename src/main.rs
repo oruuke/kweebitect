@@ -1,5 +1,7 @@
 use better_panic;
-use color_eyre;
+use clap::Parser;
+use color_eyre::eyre::WrapErr;
+use std::{fs, path::PathBuf};
 
 mod model;
 mod update;
@@ -10,34 +12,27 @@ use crate::{
     view::view,
 };
 
+#[derive(Debug, Parser)]
+#[command(name = "kweebitect", version, about)]
+struct Args {
+    #[arg(value_name = "FILE", value_hint = clap::ValueHint::FilePath)]
+    input: PathBuf,
+}
+
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     better_panic::install();
 
+    // validate and transform json to custom serde value
+    let args = Args::parse();
+    let json = fs::read_to_string(&args.input)
+        .wrap_err_with(|| format!("failed to read file: {}", args.input.display()))?;
+    let data: OrderedValue = OrderedValue::from_str(&json)
+        .wrap_err_with(|| format!("failed to parse json: {}", args.input.display()))?;
+
     let mut terminal = ratatui::init();
     let mut model = Model::default();
 
-    let json = r#"{
-        "type": "Abstract",
-        "Debug": "DisplayState",
-        "Instructions": [
-            {
-                "Sensor": {
-                    "Type": "State",
-                    "State": "Idle"
-                },
-                "Instructions": []
-            },
-            {
-                "Sensor": {
-                    "Type": "State",
-                    "State": "Sleep"
-                },
-                "Instructions": []
-            }
-        ]
-    }"#;
-    let data: OrderedValue = OrderedValue::from_str(json)?;
     model.current_json = data;
     model.ensure_root_segment();
 
