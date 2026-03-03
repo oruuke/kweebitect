@@ -2,7 +2,6 @@ use crate::model::{
     CurrentMode, Model, OrderedValue, container_entries_for, format_container_entry_lines,
     value_for_entry,
 };
-//use ratatui::crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use itertools::Itertools;
 use ratatui::{
     Frame,
@@ -16,6 +15,59 @@ use tui_widget_list::{ListBuilder, ListView, ScrollAxis};
 // return width of string
 fn display_width(s: &str) -> usize {
     s.chars().count()
+}
+
+// calculate column width from title and rendered row lines
+fn get_column_width(title: &str, container: &OrderedValue, entries: &[String]) -> u16 {
+    // include title width
+    let mut max_line_width = display_width(title);
+    for entry_label in entries {
+        // ensure all entry widths are accounted for
+        let row_value = value_for_entry(container, entry_label).unwrap_or(container);
+        for line in format_container_entry_lines(entry_label, row_value) {
+            max_line_width = max_line_width.max(display_width(&line));
+        }
+    }
+
+    // return final width, including padding
+    (max_line_width.saturating_add(4)).clamp(16, u16::MAX as usize) as u16
+}
+
+// build a rendered row for a container entry wit selection styling
+fn build_entry_row(
+    container: &OrderedValue,
+    entries: &[String],
+    index: usize,
+    is_selected: bool,
+) -> (Paragraph<'static>, u16) {
+    // row highlighting
+    let mut style = Style::default();
+    if is_selected {
+        style = style.add_modifier(Modifier::REVERSED);
+    }
+
+    // safely get label and value
+    let entry_label = entries
+        .get(index)
+        .cloned()
+        .unwrap_or_else(|| "?".to_string());
+    let row_value = value_for_entry(container, &entry_label).unwrap_or(container);
+
+    // render one or many lines depending on value type
+    let lines = format_container_entry_lines(&entry_label, row_value)
+        .into_iter()
+        .map(Line::from)
+        .collect::<Vec<_>>();
+    let height = u16::try_from(lines.len()).unwrap_or(u16::MAX);
+    let widget = Paragraph::new(Text::from(lines)).style(style);
+    (widget, height)
+}
+
+// apply shared list config for rendered columns
+fn with_standard_list_options<B>(list: ListView<B>, title: String) -> ListView<B> {
+    list.scroll_axis(ScrollAxis::Vertical)
+        .infinite_scrolling(true)
+        .block(Block::default().borders(Borders::ALL).title(title))
 }
 
 // rendering view to always produce same ui representation for given model
@@ -91,7 +143,7 @@ impl<'a> HorizontalBlocks<'a> {
         }
 
         // calculate ideal widths based on keys and values
-        let mut columns: Vec<ColumnData> = Vec::with_capacity(column_count.max(1));
+        let mut path_columns: Vec<ColumnData> = Vec::with_capacity(column_count.max(1));
         for depth in 0..column_count {
             let title = if depth == 0 {
                 "root".to_string()
@@ -124,20 +176,9 @@ impl<'a> HorizontalBlocks<'a> {
                 (container, entries)
             };
 
-            // get widest rendered line to determine suitable width
-            let mut max_line_width = display_width(&title);
-            for entry_label in &entries {
-                // simulate key/value string for maintaining width
-                let row_value = value_for_entry(&container, entry_label).unwrap_or(&container);
-                for line in format_container_entry_lines(entry_label, row_value) {
-                    max_line_width = max_line_width.max(display_width(&line));
-                }
-            }
-
             // add column wit new width and padding on top
-            let desired_width =
-                (max_line_width.saturating_add(4)).clamp(16, u16::MAX as usize) as u16;
-            columns.push(ColumnData {
+            let desired_width = get_column_width(&title, &container, &entries);
+            path_columns.push(ColumnData {
                 title,
                 container,
                 entries,
@@ -146,6 +187,7 @@ impl<'a> HorizontalBlocks<'a> {
         }
 
         // preview column for containers
+        let mut preview_column: Option<ColumnData> = None;
         if let Some(active_segment) = self.model.current_path.last() {
             if let Some(selected_value) =
                 value_for_entry(&active_segment.value, &active_segment.key)
@@ -160,18 +202,8 @@ impl<'a> HorizontalBlocks<'a> {
                     let entries = container_entries_for(&container);
 
                     // calculate column width
-                    let mut max_line_width = display_width(&title);
-                    for entry_label in &entries {
-                        let row_value =
-                            value_for_entry(&container, entry_label).unwrap_or(&container);
-                        for line in format_container_entry_lines(entry_label, row_value) {
-                            max_line_width = max_line_width.max(display_width(&line));
-                        }
-                    }
-
-                    let desired_width =
-                        (max_line_width.saturating_add(4)).clamp(16, u16::MAX as usize) as u16;
-                    columns.push(ColumnData {
+                    let desired_width = get_column_width(&title, &container, &entries);
+                    preview_column = Some(ColumnData {
                         title,
                         container,
                         entries,
@@ -181,34 +213,22 @@ impl<'a> HorizontalBlocks<'a> {
             }
         }
 
-        // setup scrolling viewport
+        // setup fixed path-based viewport wit max 4 visible columns
         let spacing: u16 = 1;
-        let viewport_width = area.width;
-        let end = columns.len();
-        let mut start = end;
-        let mut used_width: u16 = 0;
-        // maintin scrolling
-        while start > 0 {
-            let w = columns[start - 1].desired_width;
-            let add = if used_width == 0 {
-                w
-            } else {
-                w.saturating_add(spacing)
-            };
-            if used_width != 0 && used_width.saturating_add(add) > viewport_width {
-                break;
-            }
-            used_width = used_width.saturating_add(add);
-            start -= 1;
-        }
+        let path_end = path_columns.len();
+        let path_start = path_end.saturating_sub(4);
+        let visible_path_columns = &path_columns[path_start..path_end];
 
         // setup layout for each level of depth
-        let constraints: Vec<_> = columns[start..end]
+        let mut constraints: Vec<_> = visible_path_columns
             .iter()
             .map(|c| Constraint::Length(c.desired_width))
             .collect();
+        if preview_column.is_some() {
+            constraints.push(Constraint::Fill(1));
+        }
 
-        // split available area into column rects
+        // split available area into path column rects and optional trailing preview
         let layout = Layout::horizontal(constraints)
             .flex(ratatui::layout::Flex::Start)
             .spacing(spacing)
@@ -218,57 +238,56 @@ impl<'a> HorizontalBlocks<'a> {
         let mut preview_state = tui_widget_list::ListState::default();
         preview_state.select(None);
 
-        // render each column
-        for (visible_index, column_index) in (start..end).enumerate() {
-            let column = &columns[column_index];
+        // render each visible column of the path
+        for (visible_index, column) in visible_path_columns.iter().enumerate() {
             // clone into row builder closure
             let container_value_owned = column.container.clone();
             let entries_cloned = column.entries.clone();
             let builder = ListBuilder::new(move |context| {
-                // shared base styling
-                let mut style = Style::default();
-                if context.is_selected {
-                    style = style.add_modifier(Modifier::REVERSED);
-                }
-
-                // get entry label for dis row wit stable fallback
-                let entry_label = entries_cloned
-                    .get(context.index)
-                    .cloned()
-                    .unwrap_or_else(|| "?".to_string());
-
-                // get the row value for the dis entry
-                let row_value = value_for_entry(&container_value_owned, &entry_label)
-                    .unwrap_or(&container_value_owned);
-
-                // render the row wit potential for container
-                let lines = format_container_entry_lines(&entry_label, row_value)
-                    .into_iter()
-                    .map(Line::from)
-                    .collect::<Vec<_>>();
-
-                // return height along wit widget to handle multi-line
-                let height = u16::try_from(lines.len()).unwrap_or(u16::MAX);
-                let widget = Paragraph::new(Text::from(lines)).style(style);
-                (widget, height)
+                build_entry_row(
+                    &container_value_owned,
+                    &entries_cloned,
+                    context.index,
+                    context.is_selected,
+                )
             });
 
             // wrap list in a titled block for current column
-            let list = ListView::new(builder, column.entries.len())
-                .scroll_axis(ScrollAxis::Vertical)
-                .infinite_scrolling(true)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(column.title.clone()),
-                );
+            let list = with_standard_list_options(
+                ListView::new(builder, column.entries.len()),
+                column.title.clone(),
+            );
 
-            // render active and preview columns
-            if column_index < column_count {
-                let state = &mut self.model.current_path[column_index].list_state;
-                frame.render_stateful_widget(list, layout[visible_index], state);
-            } else {
-                frame.render_stateful_widget(list, layout[visible_index], &mut preview_state);
+            // render active columns mapped back to path depth
+            let path_index = path_start + visible_index;
+            let state = &mut self.model.current_path[path_index].list_state;
+            frame.render_stateful_widget(list, layout[visible_index], state);
+        }
+
+        // render preview in remaining space
+        if let Some(column) = preview_column {
+            let preview_rect_index = visible_path_columns.len();
+            if let Some(preview_rect) = layout.get(preview_rect_index).copied() {
+                if preview_rect.width > 0 && preview_rect.height > 0 {
+                    // build stateful list widget
+                    let container_value_owned = column.container.clone();
+                    let entries_cloned = column.entries.clone();
+                    let builder = ListBuilder::new(move |context| {
+                        build_entry_row(
+                            &container_value_owned,
+                            &entries_cloned,
+                            context.index,
+                            context.is_selected,
+                        )
+                    });
+
+                    // wrap list in a titled block for current column
+                    let list = with_standard_list_options(
+                        ListView::new(builder, column.entries.len()),
+                        column.title.clone(),
+                    );
+                    frame.render_stateful_widget(list, preview_rect, &mut preview_state);
+                }
             }
         }
     }

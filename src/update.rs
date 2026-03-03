@@ -8,7 +8,7 @@ use crate::model::{
     value_for_entry,
 };
 
-// update handling with a message for each action/event (logic)
+// update handling wit a message for each action/event (logic)
 #[derive(PartialEq)]
 pub enum Message {
     Out,
@@ -81,15 +81,17 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
             // move selection wit positive delta
             navigate_active_container(model, 1);
         }
-        Message::ViewPreview => match model.current_mode {
-            // toggle between preview and browse
-            CurrentMode::Preview => {
-                model.current_mode = CurrentMode::Browse;
+        Message::ViewPreview => {
+            match model.current_mode {
+                // toggle between preview and browse
+                CurrentMode::Preview => {
+                    model.current_mode = CurrentMode::Browse;
+                }
+                _ => {
+                    model.current_mode = CurrentMode::Preview;
+                }
             }
-            _ => {
-                model.current_mode = CurrentMode::Preview;
-            }
-        },
+        }
         Message::EditValue => {
             model.current_mode = CurrentMode::Edit;
         }
@@ -115,7 +117,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     None
 }
 
-// vertical navigation within container
+// vertical navigation witin container
 fn navigate_active_container(model: &mut Model, delta: isize) {
     let Some(segment) = model.current_path.last_mut() else {
         return;

@@ -177,10 +177,14 @@ impl OrderedValue {
 
     // get pretty string of json
     pub fn get_pretty(&self, path: &[impl AsRef<str>]) -> String {
-        self.get(path)
-            .expect("path not found")
+        // return readable fallback
+        let Some(value) = self.get(path) else {
+            return "<path not found>".to_string();
+        };
+
+        value
             .to_string_pretty()
-            .expect("failed to serialise")
+            .unwrap_or_else(|_| "<failed to serialise>".to_string())
     }
 }
 
