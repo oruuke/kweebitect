@@ -6,7 +6,7 @@ use crate::model::{
 use itertools::Itertools;
 use ratatui::{
     Frame,
-    layout::{Constraint, Constraint::Length, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Text},
     widgets::{Block, Borders, Paragraph},
@@ -108,11 +108,11 @@ impl<'a> HorizontalBlocks<'a> {
                 // ensure valid selection for rendering column
                 if !entries.is_empty() {
                     // defaul to first entry when no selection
-                    if segment.list_state.selected().is_none() {
+                    if segment.list_state.selected.is_none() {
                         segment.list_state.select(Some(0));
                     }
 
-                    if let Some(selected_index) = segment.list_state.selected() {
+                    if let Some(selected_index) = segment.list_state.selected {
                         // clamp selection if entries changed sincelast render
                         let selected_index = selected_index.min(entries.len().saturating_sub(1));
                         segment.list_state.select(Some(selected_index));
@@ -181,8 +181,29 @@ impl<'a> HorizontalBlocks<'a> {
             }
         }
 
+        // setup scrolling viewport
+        let spacing: u16 = 1;
+        let viewport_width = area.width;
+        let end = columns.len();
+        let mut start = end;
+        let mut used_width: u16 = 0;
+        // maintin scrolling
+        while start > 0 {
+            let w = columns[start - 1].desired_width;
+            let add = if used_width == 0 {
+                w
+            } else {
+                w.saturating_add(spacing)
+            };
+            if used_width != 0 && used_width.saturating_add(add) > viewport_width {
+                break;
+            }
+            used_width = used_width.saturating_add(add);
+            start -= 1;
+        }
+
         // setup layout for each level of depth
-        let constraints: Vec<_> = columns
+        let constraints: Vec<_> = columns[start..end]
             .iter()
             .map(|c| Constraint::Length(c.desired_width))
             .collect();
@@ -190,7 +211,7 @@ impl<'a> HorizontalBlocks<'a> {
         // split available area into column rects
         let layout = Layout::horizontal(constraints)
             .flex(ratatui::layout::Flex::Start)
-            .spacing(1)
+            .spacing(spacing)
             .split(area);
 
         // initialise preview
@@ -198,7 +219,7 @@ impl<'a> HorizontalBlocks<'a> {
         preview_state.select(None);
 
         // render each column
-        for column_index in 0..columns.len() {
+        for (visible_index, column_index) in (start..end).enumerate() {
             let column = &columns[column_index];
             // clone into row builder closure
             let container_value_owned = column.container.clone();
@@ -245,9 +266,9 @@ impl<'a> HorizontalBlocks<'a> {
             // render active and preview columns
             if column_index < column_count {
                 let state = &mut self.model.current_path[column_index].list_state;
-                frame.render_stateful_widget(list, layout[column_index], state);
+                frame.render_stateful_widget(list, layout[visible_index], state);
             } else {
-                frame.render_stateful_widget(list, layout[column_index], &mut preview_state);
+                frame.render_stateful_widget(list, layout[visible_index], &mut preview_state);
             }
         }
     }

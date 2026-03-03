@@ -1,7 +1,5 @@
 use std::time::Duration;
 
-use color_eyre;
-use indexmap::IndexMap;
 use ratatui::crossterm::event::{self, Event, KeyCode};
 use tui_widget_list::ListState;
 
@@ -29,6 +27,7 @@ pub enum Message {
     Quit,
 }
 
+// core event listener
 pub fn handle_event(model: &Model) -> color_eyre::Result<Option<Message>> {
     if event::poll(Duration::from_millis(250))? {
         if let Event::Key(key) = event::read()? {
@@ -40,6 +39,7 @@ pub fn handle_event(model: &Model) -> color_eyre::Result<Option<Message>> {
     Ok(None)
 }
 
+// event distribution to message for action
 fn handle_key(key: event::KeyEvent, model: &Model) -> Option<Message> {
     match key.code {
         KeyCode::Char('h') | KeyCode::Left => Some(Message::Out),
@@ -62,6 +62,7 @@ fn handle_key(key: event::KeyEvent, model: &Model) -> Option<Message> {
     }
 }
 
+// message hander to call actions
 pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     // match all possible messages and return new model reflecting changes
     match msg {
@@ -114,6 +115,7 @@ pub fn update(model: &mut Model, msg: Message) -> Option<Message> {
     None
 }
 
+// vertical navigation within container
 fn navigate_active_container(model: &mut Model, delta: isize) {
     let Some(segment) = model.current_path.last_mut() else {
         return;
@@ -126,7 +128,7 @@ fn navigate_active_container(model: &mut Model, delta: isize) {
     }
 
     // ensure selection exists before moving
-    if segment.list_state.selected().is_none() {
+    if segment.list_state.selected.is_none() {
         segment.list_state.select(Some(0));
     }
 
@@ -138,7 +140,7 @@ fn navigate_active_container(model: &mut Model, delta: isize) {
     }
 
     // map selection back into a key/index string
-    let Some(selected_index) = segment.list_state.selected() else {
+    let Some(selected_index) = segment.list_state.selected else {
         return;
     };
     let Some(selected_key) = entries.get(selected_index).cloned() else {
@@ -149,7 +151,7 @@ fn navigate_active_container(model: &mut Model, delta: isize) {
     segment.key = selected_key;
 }
 
-// adds new list state for selected container
+// horizontal navigation between containers
 fn enter_container(model: &mut Model) {
     // get active depth segment
     let Some(parent) = model.current_path.last() else {

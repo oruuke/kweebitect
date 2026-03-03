@@ -30,25 +30,26 @@ fn main() -> color_eyre::Result<()> {
     let data: OrderedValue = OrderedValue::from_str(&json)
         .wrap_err_with(|| format!("failed to parse json: {}", args.input.display()))?;
 
-    let mut terminal = ratatui::init();
-    let mut model = Model::default();
+    ratatui::run(|terminal| {
+        let mut model = Model::default();
 
-    model.current_json = data;
-    model.ensure_root_segment();
+        model.current_json = data;
+        model.ensure_root_segment();
 
-    while model.running_state != RunningState::Done {
-        // render current  view
-        terminal.draw(|f| view(&mut model, f))?;
+        while model.running_state != RunningState::Done {
+            // render current  view
+            terminal.draw(|f| view(&mut model, f))?;
 
-        // handle events and map to a message
-        let mut current_msg = handle_event(&model)?;
+            // handle events and map to a message
+            let mut current_msg = handle_event(&model)?;
 
-        // process updates until none message
-        while current_msg.is_some() {
-            current_msg = update(&mut model, current_msg.unwrap());
+            // process updates until none message
+            while current_msg.is_some() {
+                current_msg = update(&mut model, current_msg.unwrap());
+            }
         }
-    }
 
-    ratatui::restore();
-    Ok(())
+        ratatui::restore();
+        Ok(())
+    })
 }
