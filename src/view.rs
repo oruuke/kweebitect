@@ -126,6 +126,9 @@ pub struct HorizontalBlocks<'a> {
 
 // horizontal list for representing depth
 impl<'a> HorizontalBlocks<'a> {
+    // width at which only two path columns are visible
+    const TWO_COL_WIDTH: u16 = 150;
+
     pub fn new(model: &'a mut Model) -> Self {
         Self { model }
     }
@@ -213,10 +216,15 @@ impl<'a> HorizontalBlocks<'a> {
             }
         }
 
-        // setup fixed path-based viewport wit max 4 visible columns
+        // setup responsive viewport wit either 4 or 2 max visible columns
         let spacing: u16 = 1;
+        let max_visible_path_columns = if area.width <= Self::TWO_COL_WIDTH {
+            2
+        } else {
+            4
+        };
         let path_end = path_columns.len();
-        let path_start = path_end.saturating_sub(4);
+        let path_start = path_end.saturating_sub(max_visible_path_columns);
         let visible_path_columns = &path_columns[path_start..path_end];
 
         // setup layout for each level of depth
